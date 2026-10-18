@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>BioPatch Control Center</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons for medical-cyber aesthetics -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            patchDark: '#090d16',
+            patchCard: '#111827',
+            patchBorder: '#1f293d',
+            cyanGlow: '#06b6d4',
+            crimsonAlert: '#ef4444',
+            amberWarn: '#f59e0b',
+            emeraldSafe: '#10b981'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom pulse animations & glowing accents */
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.9; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.05); }
+    }
+    .glow-dot {
+      animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    /* Hide scrollbar for slick app look */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-patchDark text-slate-100 min-h-screen flex flex-col font-sans select-none antialiased">
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-30 bg-patchDark/80 backdrop-blur-md border-b border-patchBorder px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-2.5">
+      <div class="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+        <i class="ph ph-activity text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-sm font-semibold tracking-wider uppercase text-slate-100 flex items-center gap-1.5">
+          BioPatch
+          <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/60">v1.0</span>
+        </h1>
+        <p class="text-[11px] text-slate-400 font-medium" id="headerSubtitle">Web BLE Controller</p>
+      </div>
+    </div>
+
+    <!-- Quick Status Badge -->
+    <div id="connectionBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-red-950/60 border border-red-800/60 text-red-400 transition-all">
+      <span class="w-2 h-2 rounded-full bg-red-500"></span>
+      <span id="connectionBadgeText">Отключено</span>
+    </div>
+  </header>
+
+  <!-- Main Scrollable Content -->
+  <main class="flex-1 p-4 max-w-md w-full mx-auto space-y-4 pb-8">
+
+    <!-- Connect / Disconnect Action Bar -->
+    <section class="bg-patchCard rounded-2xl p-4 border border-patchBorder shadow-lg relative overflow-hidden">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex-1">
+          <div class="text-xs uppercase font-mono tracking-wider text-slate-400">Устройство</div>
+          <div id="deviceNameLabel" class="text-base font-semibold text-slate-200 truncate">BioPatch (nRF52)</div>
+        </div>
+
+        <button id="btnConnect" class="px-5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 transition-all active:scale-95 bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20">
+          <i class="ph ph-bluetooth text-lg"></i>
+          <span id="btnConnectLabel">Подключить</span>
+        </button>
+      </div>
+
+      <!-- Compatibility Warning Notice -->
+      <div id="bleSupportWarning" class="hidden mt-3 p-2.5 rounded-lg bg-amber-950/50 border border-amber-800/60 text-amber-300 text-xs flex items-start gap-2">
+        <i class="ph ph-warning-circle text-base shrink-0 mt-0.5"></i>
+        <span>Web Bluetooth не поддерживается данным браузером. Откройте в Google Chrome на Android или Mac/PC.</span>
+      </div>
+    </section>
+
+    <!-- Battery & Rhythm Live Status -->
+    <div class="grid grid-cols-2 gap-3">
+      <!-- Battery Card -->
+      <section class="bg-patchCard rounded-2xl p-4 border border-patchBorder flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="text-xs font-mono uppercase tracking-wider">Батарея</span>
+          <i id="batteryIcon" class="ph ph-battery-warning text-lg text-amber-400"></i>
+        </div>
+        <div class="mt-2 flex items-baseline gap-1">
+          <span id="batteryPercentText" class="text-3xl font-bold font-mono tracking-tight text-slate-100">--</span>
+          <span class="text-sm font-semibold text-slate-400">%</span>
+        </div>
+        <div class="mt-3 w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+          <div id="batteryProgressBar" class="bg-emeraldSafe h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </section>
+
+      <!-- Live Rhythm Progress -->
+      <section class="bg-patchCard rounded-2xl p-4 border border-patchBorder flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="text-xs font-mono uppercase tracking-wider">Ритм</span>
+          <span id="cycleRawText" class="text-xs font-mono px-1.5 py-0.2 rounded bg-slate-800 text-cyan-300">0 / 5</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-1">
+          <span id="cycleMainCount" class="text-3xl font-bold font-mono tracking-tight text-cyan-400">0</span>
+          <span class="text-xs font-medium text-slate-400">циклов</span>
+        </div>
+        <!-- 5 Step Dots -->
+        <div class="mt-3 flex items-center justify-between gap-1">
+          <div class="cycle-step flex-1 h-1.5 rounded-full bg-slate-800 transition-colors"></div>
+          <div class="cycle-step flex-1 h-1.5 rounded-full bg-slate-800 transition-colors"></div>
+          <div class="cycle-step flex-1 h-1.5 rounded-full bg-slate-800 transition-colors"></div>
+          <div class="cycle-step flex-1 h-1.5 rounded-full bg-slate-800 transition-colors"></div>
+          <div class="cycle-step flex-1 h-1.5 rounded-full bg-slate-800 transition-colors"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Strikes Escalation Matrix -->
+    <section class="bg-patchCard rounded-2xl p-4 border border-patchBorder space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="ph ph-shield-warning text-sm text-amber-400"></i>
+          Уровни эскалации нарушений
+        </h2>
+        <span id="totalStrikesCount" class="text-xs font-mono text-slate-400">Фаза: 0 / 6</span>
+      </div>
+
+      <!-- Vibro Phase (1-3) -->
+      <div class="space-y-1.5">
+        <div class="flex justify-between text-[11px] font-medium text-slate-400">
+          <span>Фаза 1: Тактильные импульсы</span>
+          <span id="vibroStatusLabel" class="font-mono text-amber-400">0 из 3</span>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <!-- Step 1 -->
+          <div id="vStep1" class="rounded-xl border border-patchBorder bg-slate-900/60 p-2.5 flex flex-col items-center justify-center text-center transition-all">
+            <i class="ph ph-vibrate text-base text-slate-500 mb-1"></i>
+            <span class="text-[11px] font-semibold text-slate-300">1. Одиночный</span>
+            <span class="text-[9px] text-slate-500 font-mono">500 мс</span>
+          </div>
+          <!-- Step 2 -->
+          <div id="vStep2" class="rounded-xl border border-patchBorder bg-slate-900/60 p-2.5 flex flex-col items-center justify-center text-center transition-all">
+            <i class="ph ph-vibrate text-base text-slate-500 mb-1"></i>
+            <span class="text-[11px] font-semibold text-slate-300">2. Двойной</span>
+            <span class="text-[9px] text-slate-500 font-mono">400+400 мс</span>
+          </div>
+          <!-- Step 3 -->
+          <div id="vStep3" class="rounded-xl border border-patchBorder bg-slate-900/60 p-2.5 flex flex-col items-center justify-center text-center transition-all">
+            <i class="ph ph-vibrate text-base text-slate-500 mb-1"></i>
+            <span class="text-[11px] font-semibold text-slate-300">3. Пролонгир.</span>
+            <span class="text-[9px] text-slate-500 font-mono">400+400+800</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sound Phase (4-6) -->
+      <div class="space-y-1.5 pt-1 border-t border-slate-800/80">
+        <div class="flex justify-between text-[11px] font-medium text-slate-400">
+          <span>Фаза 2: Звуковая тревога (Зуммер)</span>
+          <span id="soundStatusLabel" class="font-mono text-crimsonAlert">0 из 3</span>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <!-- S1 -->
+          <div id="sStep1" class="rounded-xl border border-patchBorder bg-slate-900/60 p-2.5 flex flex-col items-center justify-center text-center transition-all">
+            <i class="ph ph-speaker-high text-base text-slate-500 mb-1"></i>
+            <span class="text-[11px] font-semibold text-slate-300">1. Сигнал</span>
+            <span class="text-[9px] text-slate-500 font-mono">4.0 кГц • 1.5с</span>
+          </div>
+          <!-- S2 -->
+          <div id="sStep2" class="rounded-xl border border-patchBorder bg-slate-900/60 p-2.5 flex flex-col items-center justify-center text-center transition-all">
+            <i class="ph ph-speaker-high text-base text-slate-500 mb-1"></i>
+            <span class="text-[11px] font-semibold text-slate-300">2. Свип</span>
+            <span class="text-[9px] text-slate-500 font-mono">1.5–4.5 кГц</span>
+          </div>
+          <!-- S3 -->
+          <div id="sStep3" class="rounded-xl border border-patchBorder bg-slate-900/60 p-2.5 flex flex-col items-center justify-center text-center transition-all">
+            <i class="ph ph-warning-octagon text-base text-slate-500 mb-1"></i>
+            <span class="text-[11px] font-semibold text-slate-300">3. Сирена</span>
+            <span class="text-[9px] text-slate-500 font-mono">Тревога 5с</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Control Actions Panel -->
+    <section class="bg-patchCard rounded-2xl p-4 border border-patchBorder space-y-3">
+      <div class="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+        <i class="ph ph-faders text-sm text-cyan-400"></i>
+        Команды управления
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <!-- Command 0x01: Reset -->
+        <button id="btnCmdReset" disabled class="control-btn p-3 rounded-xl bg-slate-900 border border-patchBorder hover:border-cyan-500/50 text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium text-xs transition-all active:scale-95">
+          <i class="ph ph-arrow-counter-clockwise text-base text-cyan-400"></i>
+          <span>Сброс нарушений</span>
+        </button>
+
+        <!-- Command 0x02: Mute -->
+        <button id="btnCmdMute" disabled class="control-btn p-3 rounded-xl bg-slate-900 border border-patchBorder hover:border-amber-500/50 text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium text-xs transition-all active:scale-95">
+          <i class="ph ph-speaker-simple-slash text-base text-amber-400"></i>
+          <span>Заглушить тревогу</span>
+        </button>
+
+        <!-- Command 0x03: Test -->
+        <button id="btnCmdTest" disabled class="control-btn p-3 rounded-xl bg-slate-900 border border-patchBorder hover:border-emerald-500/50 text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium text-xs transition-all active:scale-95">
+          <i class="ph ph-vibrate text-base text-emerald-400"></i>
+          <span>Тест вибрации</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Live Event Log -->
+    <section class="bg-patchCard rounded-2xl p-4 border border-patchBorder space-y-2.5">
+      <div class="flex items-center justify-between">
+        <div class="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="ph ph-terminal-window text-sm text-slate-400"></i>
+          Журнал событий
+        </div>
+        <button id="btnClearLog" class="text-[11px] font-mono text-slate-500 hover:text-slate-300 transition-colors">
+          Очистить
+        </button>
+      </div>
+
+      <div id="logContainer" class="bg-patchDark/80 rounded-xl p-3 border border-patchBorder h-36 overflow-y-auto font-mono text-[11px] space-y-1.5 no-scrollbar text-slate-400">
+        <div class="text-slate-600 italic">Ожидание подключения к BioPatch...</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Notification Toast Modal -->
+  <div id="toastMessage" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-mono shadow-2xl flex items-center gap-2 text-slate-200 opacity-0 pointer-events-none transition-all duration-300">
+    <i id="toastIcon" class="ph ph-info text-cyan-400 text-base"></i>
+    <span id="toastText">Готово</span>
+  </div>
+
+  <script>
+    // --- BLE UUID Configuration (matches Arduino sketch) ---
+    const BLE_CONFIG = {
+      CUSTOM_SERVICE: '19b10000-e8f2-537e-4f6c-d104768a1214',
+      CHAR_STRIKES:   '19b10001-e8f2-537e-4f6c-d104768a1214',
+      CHAR_CYCLES:    '19b10002-e8f2-537e-4f6c-d104768a1214',
+      CHAR_COMMAND:   '19b10003-e8f2-537e-4f6c-d104768a1214',
+      BATTERY_SERVICE: 0x180F,
+      CHAR_BATTERY:    0x2A19
+    };
+
+    // State Variables
+    let bleDevice = null;
+    let bleServer = null;
+    let charStrikes = null;
+    let charCycles = null;
+    let charCommand = null;
+    let charBattery = null;
+
+    let isConnecting = false;
+
+    // DOM References
+    const btnConnect = document.getElementById('btnConnect');
+    const btnConnectLabel = document.getElementById('btnConnectLabel');
+    const connectionBadge = document.getElementById('connectionBadge');
+    const connectionBadgeText = document.getElementById('connectionBadgeText');
+    const deviceNameLabel = document.getElementById('deviceNameLabel');
+    const bleSupportWarning = document.getElementById('bleSupportWarning');
+
+    const batteryPercentText = document.getElementById('batteryPercentText');
+    const batteryProgressBar = document.getElementById('batteryProgressBar');
+    const batteryIcon = document.getElementById('batteryIcon');
+
+    const cycleMainCount = document.getElementById('cycleMainCount');
+    const cycleRawText = document.getElementById('cycleRawText');
+    const cycleDots = document.querySelectorAll('.cycle-step');
+
+    const vibroStatusLabel = document.getElementById('vibroStatusLabel');
+    const soundStatusLabel = document.getElementById('soundStatusLabel');
+    const totalStrikesCount = document.getElementById('totalStrikesCount');
+
+    const vSteps = [
+      document.getElementById('vStep1'),
+      document.getElementById('vStep2'),
+      document.getElementById('vStep3')
+    ];
+    const sSteps = [
+      document.getElementById('sStep1'),
+      document.getElementById('sStep2'),
+      document.getElementById('sStep3')
+    ];
+
+    const btnCmdReset = document.getElementById('btnCmdReset');
+    const btnCmdMute = document.getElementById('btnCmdMute');
+    const btnCmdTest = document.getElementById('btnCmdTest');
+    const btnClearLog = document.getElementById('btnClearLog');
+    const logContainer = document.getElementById('logContainer');
+
+    const toastMessage = document.getElementById('toastMessage');
+    const toastText = document.getElementById('toastText');
+    const toastIcon = document.getElementById('toastIcon');
+
+    // Check Web Bluetooth Support
+    if (!navigator.bluetooth) {
+      bleSupportWarning.classList.remove('hidden');
+      btnConnect.disabled = true;
+      btnConnect.classList.add('opacity-40', 'cursor-not-allowed');
+      appendLog('Web Bluetooth не поддерживается данным браузером', 'err');
+    }
+
+    // Helper: Logging with timestamps
+    function appendLog(message, type = 'info') {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+      const entry = document.createElement('div');
+      entry.className = 'flex items-start gap-1.5';
+
+      let colorClass = 'text-slate-400';
+      if (type === 'warn') colorClass = 'text-amber-400';
+      if (type === 'err') colorClass = 'text-red-400';
+      if (type === 'success') colorClass = 'text-emerald-400';
+      if (type === 'event') colorClass = 'text-cyan-400';
+
+      entry.innerHTML = `<span class="text-slate-600 select-none">[${timeStr}]</span> <span class="${colorClass}">${message}</span>`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // Helper: Toast Notifications
+    let toastTimeout = null;
+    function showToast(text, icon = 'ph-info', isErr = false) {
+      clearTimeout(toastTimeout);
+      toastText.textContent = text;
+      toastIcon.className = `ph ${icon} ${isErr ? 'text-red-400' : 'text-cyan-400'} text-base`;
+      toastMessage.classList.remove('opacity-0', 'pointer-events-none');
+      toastMessage.classList.add('opacity-100');
+
+      toastTimeout = setTimeout(() => {
+        toastMessage.classList.remove('opacity-100');
+        toastMessage.classList.add('opacity-0', 'pointer-events-none');
+      }, 2500);
+    }
+
+    // Update Connection UI State
+    function updateConnectionUI(connected) {
+      if (connected) {
+        connectionBadge.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-emerald-950/60 border border-emerald-800/60 text-emerald-400';
+        connectionBadgeText.textContent = 'Подключено';
+        connectionBadge.querySelector('span').className = 'w-2 h-2 rounded-full bg-emerald-400 glow-dot';
+
+        btnConnect.className = 'px-5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 transition-all active:scale-95 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700';
+        btnConnectLabel.textContent = 'Отключить';
+
+        btnCmdReset.disabled = false;
+        btnCmdMute.disabled = false;
+        btnCmdTest.disabled = false;
+
+        deviceNameLabel.textContent = bleDevice ? bleDevice.name || 'BioPatch' : 'BioPatch';
+      } else {
+        connectionBadge.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-red-950/60 border border-red-800/60 text-red-400';
+        connectionBadgeText.textContent = 'Отключено';
+        connectionBadge.querySelector('span').className = 'w-2 h-2 rounded-full bg-red-500';
+
+        btnConnect.className = 'px-5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 transition-all active:scale-95 bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20';
+        btnConnectLabel.textContent = 'Подключить';
+
+        btnCmdReset.disabled = true;
+        btnCmdMute.disabled = true;
+        btnCmdTest.disabled = true;
+
+        batteryPercentText.textContent = '--';
+        batteryProgressBar.style.width = '0%';
+        updateRhythmUI(0);
+        updateStrikesUI(0, 0);
+      }
+    }
+
+    // Connect / Disconnect Handler
+    async function toggleConnection() {
+      if (bleDevice && bleDevice.gatt.connected) {
+        appendLog('Отключение по запросу пользователя...', 'warn');
+        bleDevice.gatt.disconnect();
+        return;
+      }
+
+      try {
+        isConnecting = true;
+        btnConnectLabel.textContent = 'Поиск...';
+        appendLog('Поиск устройства BioPatch поблизости...', 'info');
+
+        // Request BLE Device with filter and required services
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [
+            { name: 'BioPatch' },
+            { namePrefix: 'Bio' }
+          ],
+          optionalServices: [
+            BLE_CONFIG.CUSTOM_SERVICE,
+            BLE_CONFIG.BATTERY_SERVICE
+          ]
+        });
+
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+        appendLog(`Устройство найдено: ${bleDevice.name}. Подключение к GATT...`, 'info');
+        btnConnectLabel.textContent = 'Связь...';
+        bleServer = await bleDevice.gatt.connect();
+
+        appendLog('GATT подключен. Обнаружение сервисов...', 'info');
+
+        // 1. Setup Custom Service & Characteristics
+        const customService = await bleServer.getPrimaryService(BLE_CONFIG.CUSTOM_SERVICE);
+        
+        charStrikes = await customService.getCharacteristic(BLE_CONFIG.CHAR_STRIKES);
+        charCycles  = await customService.getCharacteristic(BLE_CONFIG.CHAR_CYCLES);
+        charCommand = await customService.getCharacteristic(BLE_CONFIG.CHAR_COMMAND);
+
+        // Subscribe to strikes notify
+        await charStrikes.startNotifications();
+        charStrikes.addEventListener('characteristicvaluechanged', onStrikesChanged);
+        
+        // Initial read strikes
+        const initialStrikesVal = await charStrikes.readValue();
+        onStrikesChanged({ target: { value: initialStrikesVal } });
+
+        // Subscribe to cycles notify
+        await charCycles.startNotifications();
+        charCycles.addEventListener('characteristicvaluechanged', onCyclesChanged);
+
+        // 2. Setup Battery Service
+        try {
+          const batteryService = await bleServer.getPrimaryService(BLE_CONFIG.BATTERY_SERVICE);
+          charBattery = await batteryService.getCharacteristic(BLE_CONFIG.CHAR_BATTERY);
+          await charBattery.startNotifications();
+          charBattery.addEventListener('characteristicvaluechanged', onBatteryChanged);
+
+          const initBat = await charBattery.readValue();
+          onBatteryChanged({ target: { value: initBat } });
+        } catch (e) {
+          appendLog('Battery Service не доступен или отключен', 'warn');
+        }
+
+        updateConnectionUI(true);
+        appendLog('BioPatch полностью подключен и готов к работе', 'success');
+        showToast('Подключено к BioPatch', 'ph-bluetooth-connected');
+
+      } catch (error) {
+        console.error('BLE Connection error:', error);
+        appendLog(`Ошибка подключения: ${error.message || error}`, 'err');
+        showToast('Не удалось подключить', 'ph-x-circle', true);
+        updateConnectionUI(false);
+      } finally {
+        isConnecting = false;
+      }
+    }
+
+    function onDisconnected(event) {
+      appendLog('Связь с BioPatch потеряна или разорвана', 'err');
+      showToast('Соединение разорвано', 'ph-warning', true);
+      updateConnectionUI(false);
+    }
+
+    // Strikes Notification Handler
+    function onStrikesChanged(event) {
+      const data = event.target.value;
+      if (data.byteLength < 2) return;
+      const vibro = data.getUint8(0);
+      const sound = data.getUint8(1);
+      updateStrikesUI(vibro, sound);
+    }
+
+    function updateStrikesUI(vibro, sound) {
+      vibroStatusLabel.textContent = `${vibro} из 3`;
+      soundStatusLabel.textContent = `${sound} из 3`;
+      totalStrikesCount.textContent = `Фаза: ${vibro + sound} / 6`;
+
+      // Update Vibro UI badges
+      vSteps.forEach((el, idx) => {
+        if (idx < vibro) {
+          el.className = 'rounded-xl border border-amber-500/60 bg-amber-950/40 p-2.5 flex flex-col items-center justify-center text-center shadow-lg shadow-amber-900/20';
+          el.querySelector('i').className = 'ph ph-vibrate text-base text-amber-400 mb-1';
+          el.querySelector('span:first-of-type').className = 'text-[11px] font-semibold text-amber-300';
+        } else {
+          el.className = 'rounded-xl border border-patchBorder bg-slate-900/60 p-2.5 flex flex-col items-center justify-center text-center';
+          el.querySelector('i').className = 'ph ph-vibrate text-base text-slate-500 mb-1';
+          el.querySelector('span:first-of-type').className = 'text-[11px] font-semibold text-slate-300';
+        }
+      });
+
+      // Update Sound UI badges
+      sSteps.forEach((el, idx) => {
+        if (idx < sound) {
+          el.className = 'rounded-xl border border-red-500/70 bg-red-950/40 p-2.5 flex flex-col items-center justify-center text-center shadow-lg shadow-red-900/30';
+          el.querySelector('i').className = 'ph ph-speaker-high text-base text-red-400 mb-1';
+          el.querySelector('span:first-of-type').className = 'text-[11px] font-semibold text-red-300';
+        } else {
+          el.className = 'rounded-xl border border-patchBorder bg-slate-900/60 p-2.5 flex flex-col items-center justify-center text-center';
+          el.querySelector('i').className = 'ph ph-speaker-high text-base text-slate-500 mb-1';
+          el.querySelector('span:first-of-type').className = 'text-[11px] font-semibold text-slate-300';
+        }
+      });
+
+      if (vibro > 0 || sound > 0) {
+        appendLog(`Нарушение зафиксировано: Вибро=[${vibro}], Звук=[${sound}]`, sound > 0 ? 'err' : 'warn');
+      }
+    }
+
+    // Cycles Notification Handler
+    function onCyclesChanged(event) {
+      const data = event.target.value;
+      if (data.byteLength < 1) return;
+      const count = data.getUint8(0);
+      updateRhythmUI(count);
+    }
+
+    function updateRhythmUI(count) {
+      cycleMainCount.textContent = count;
+      cycleRawText.textContent = `${count} / 5`;
+
+      cycleDots.forEach((dot, index) => {
+        if (index < count) {
+          dot.className = 'cycle-step flex-1 h-1.5 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400/50 transition-all';
+        } else {
+          dot.className = 'cycle-step flex-1 h-1.5 rounded-full bg-slate-800 transition-colors';
+        }
+      });
+    }
+
+    // Battery Notification Handler
+    function onBatteryChanged(event) {
+      const data = event.target.value;
+      if (data.byteLength < 1) return;
+      const percent = data.getUint8(0);
+
+      batteryPercentText.textContent = percent;
+      batteryProgressBar.style.width = `${percent}%`;
+
+      if (percent <= 20) {
+        batteryProgressBar.className = 'bg-red-500 h-full rounded-full transition-all duration-500';
+        batteryIcon.className = 'ph ph-battery-low text-lg text-red-400';
+      } else if (percent <= 45) {
+        batteryProgressBar.className = 'bg-amber-400 h-full rounded-full transition-all duration-500';
+        batteryIcon.className = 'ph ph-battery-medium text-lg text-amber-400';
+      } else {
+        batteryProgressBar.className = 'bg-emeraldSafe h-full rounded-full transition-all duration-500';
+        batteryIcon.className = 'ph ph-battery-high text-lg text-emerald-400';
+      }
+      appendLog(`Заряд батареи: ${percent}%`, 'info');
+    }
+
+    // Send Command Byte Helper
+    async function sendCommand(cmdByte, descName) {
+      if (!charCommand || !bleDevice || !bleDevice.gatt.connected) {
+        showToast('Устройство не подключено', 'ph-warning', true);
+        return;
+      }
+
+      try {
+        const payload = new Uint8Array([cmdByte]);
+        await charCommand.writeValue(payload);
+        appendLog(`Отправлена команда: [${descName}] (0x0${cmdByte})`, 'event');
+        showToast(`Выполнено: ${descName}`, 'ph-check-circle');
+      } catch (err) {
+        console.error('Command write failed:', err);
+        appendLog(`Ошибка отправки команды ${descName}: ${err.message}`, 'err');
+        showToast('Ошибка команды', 'ph-x-circle', true);
+      }
+    }
+
+    // Event Listeners
+    btnConnect.addEventListener('click', toggleConnection);
+
+    btnCmdReset.addEventListener('click', () => sendCommand(0x01, 'Сброс нарушений'));
+    btnCmdMute.addEventListener('click',  () => sendCommand(0x02, 'Заглушить тревогу'));
+    btnCmdTest.addEventListener('click',  () => sendCommand(0x03, 'Тест вибрации'));
+
+    btnClearLog.addEventListener('click', () => {
+      logContainer.innerHTML = '<div class="text-slate-600 italic">Журнал очищен</div>';
+    });
+  </script>
+</body>
+</html>
